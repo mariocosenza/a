@@ -2,12 +2,12 @@ package Controller;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
-import java.util.Iterator;
 
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletException;
@@ -72,10 +72,15 @@ public class UploadGame extends HttpServlet {
 				fileName = extractFileName(part);
 			
 				if (fileName != null && !fileName.equals("")) {
-					part.write(savePath + File.separator + fileName);
-					g1.setImg(fileName);
-					
-					message = message + fileName + "\n";
+					 String sanitizedFileName = sanitizeFileName(fileName);
+	                    if (isValidFileExtension(sanitizedFileName) && isValidFileContent(part)) {
+	                        part.write(savePath + File.separator + sanitizedFileName);
+	                        g1.setImg(sanitizedFileName);
+	                        message += sanitizedFileName + "\n";
+	                    } else {
+	                        request.setAttribute("error", "Errore: File non valido");
+	                        break;
+	                    }
 				} else {
 					request.setAttribute("error", "Errore: Bisogna selezionare almeno un file");
 				}
@@ -116,6 +121,46 @@ public class UploadGame extends HttpServlet {
 		}
 		return "";
 	}
-	
 
+    private String sanitizeFileName(String fileName) {
+        return fileName.replaceAll("[^a-zA-Z0-9\\.\\-]", "_");
+    }
+
+    private boolean isValidFileExtension(String fileName) {
+        String[] allowedExtensions = { "jpg", "jpeg", "png", "gif" };
+        String fileExtension = fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
+        for (String ext : allowedExtensions) {
+            if (ext.equals(fileExtension)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isValidFileContent(Part part) throws IOException {
+        InputStream inputStream = part.getInputStream();
+        byte[] header = new byte[8];
+        inputStream.read(header);
+        inputStream.close();
+
+        return isJPEG(header) || isPNG(header) || isGIF(header);
+    }
+    
+    private boolean isJPEG(byte[] header) {
+        // JPEG files start with FF D8 FF
+        return header[0] == (byte)0xFF && header[1] == (byte)0xD8 && header[2] == (byte)0xFF;
+    }
+
+    private boolean isPNG(byte[] header) {
+        // PNG files start with 89 50 4E 47 0D 0A 1A 0A
+        return header[0] == (byte)0x89 && header[1] == (byte)0x50 && header[2] == (byte)0x4E && header[3] == (byte)0x47 &&
+               header[4] == (byte)0x0D && header[5] == (byte)0x0A && header[6] == (byte)0x1A && header[7] == (byte)0x0A;
+    }
+
+    private boolean isGIF(byte[] header) {
+        // GIF files start with GIF87a or GIF89a
+        return (header[0] == 'G' && header[1] == 'I' && header[2] == 'F' && 
+                (header[3] == '8' && (header[4] == '7' || header[4] == '9') && header[5] == 'a'));
+    }
 }
+	
